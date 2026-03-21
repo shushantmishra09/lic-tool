@@ -3,27 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIC Assistant Tool</title>
+    <title>LIC Policy Tool</title>
     <style>
         body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f0f2f5; text-align: center; }
         .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 85%; max-width: 400px; }
-        .policy-box { font-size: 1.5rem; font-weight: bold; color: #00529b; margin: 20px 0; border: 2px dashed #ccc; padding: 15px; border-radius: 8px; background: #fff9e6; min-height: 40px; }
-        .status-msg { margin-bottom: 10px; font-weight: bold; color: #555; }
-        .fup-display { color: #28a745; font-size: 1.1rem; margin-bottom: 20px; font-weight: bold; min-height: 25px; }
-        .btn { display: block; width: 100%; padding: 15px; background: #00529b; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; margin-top: 10px; transition: 0.3s; }
-        .btn:hover { background: #003d73; }
-        .btn-secondary { background: #6c757d; display: none; }
+        .policy-box { font-size: 1.5rem; font-weight: bold; color: #00529b; margin: 20px 0; border: 2px dashed #ccc; padding: 15px; border-radius: 8px; background: #fff9e6; }
+        .fup-box { margin: 15px 0; padding: 10px; border-radius: 5px; background: #e7f3ff; color: #00529b; font-weight: bold; display: none; }
+        .btn { display: block; width: 100%; padding: 15px; background: #00529b; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; margin-top: 10px; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #00529b; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <div id="status" class="status-msg">Initializing...</div>
+    <h2 id="status">LIC Policy Assistant</h2>
     <div id="policy-display" class="policy-box">-------</div>
-    <div id="fup-result" class="fup-display">Searching FUP...</div>
+    
+    <div id="fup-container" class="fup-box">
+        <span id="fup-loader" class="loader"></span>
+        <span id="fup-text">Checking FUP...</span>
+    </div>
 
-    <button class="btn" id="main-btn" onclick="copyAndRedirect()">Copy & Open LIC Mitra</button>
-    <a href="https://lic.corover.ai/" class="btn btn-secondary" id="manual-btn">Open Manually</a>
+    <button class="btn" id="copy-btn" onclick="copyPolicy()">Copy & Open LIC Mitra</button>
 </div>
 
 <script>
@@ -31,19 +33,17 @@
     const policyNo = params.get('text');
     
     const display = document.getElementById('policy-display');
-    const fupDisplay = document.getElementById('fup-result');
-    const status = document.getElementById('status');
+    const fupContainer = document.getElementById('fup-container');
+    const fupText = document.getElementById('fup-text');
+    const fupLoader = document.getElementById('fup-loader');
 
     if (policyNo) {
         display.innerText = policyNo;
-        status.innerText = "Policy Detected";
-        getLICData(policyNo);
-    } else {
-        status.innerText = "Error: No Policy Found";
-        fupDisplay.innerText = "";
+        fupContainer.style.display = "block";
+        fetchLICData(policyNo);
     }
 
-    async function getLICData(policy) {
+    async function fetchLICData(policy) {
         const url = "https://api.lic.corover.ai/lic_v2/chat/query/stream?lang=en";
         const payload = {
             "appId": "6af707a1-457a-4d42-ac30-f2e6a1fda747",
@@ -54,14 +54,14 @@
 
         try {
             const response = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let accumulatedText = "";
+            let fullText = "";
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -69,39 +69,37 @@
                 
                 const chunk = decoder.decode(value, { stream: true });
                 const lines = chunk.split('\n');
-
+                
                 for (let line of lines) {
                     if (line.startsWith('data: ')) {
                         try {
-                            const json = JSON.parse(line.replace('data: ', '').trim());
-                            if (json.text) accumulatedText += json.text;
-                        } catch (e) {}
+                            const data = JSON.parse(line.replace('data: ', ''));
+                            if (data.text) fullText += data.text;
+                        } catch (e) { /* End of stream */ }
                     }
                 }
             }
 
-            // Extract Date DD/MM/YYYY
-            const dateMatch = accumulatedText.match(/\d{2}\/\d{2}\/\d{4}/);
-            fupDisplay.innerText = dateMatch ? "FUP Date: " + dateMatch[0] : "FUP Not Found";
-            status.innerText = "Ready to Copy";
+            const dateMatch = fullText.match(/\d{2}\/\d{2}\/\d{4}/);
+            fupLoader.style.display = "none";
+            fupText.innerText = dateMatch ? "Next FUP: " + dateMatch[0] : "FUP Not Found";
 
         } catch (err) {
-            fupDisplay.innerText = "API Error: FUP Hidden";
-            console.error(err);
+            fupLoader.style.display = "none";
+            fupText.innerText = "Error fetching FUP";
         }
     }
 
-    async function copyAndRedirect() {
+    async function copyPolicy() {
         if (!policyNo) return;
         try {
             await navigator.clipboard.writeText(policyNo);
-            status.innerText = "✅ Copied to Clipboard!";
+            document.getElementById('status').innerText = "✅ Copied!";
             setTimeout(() => {
                 window.location.href = "https://lic.corover.ai/";
-            }, 1000);
+            }, 1200);
         } catch (err) {
-            document.getElementById('manual-btn').style.display = "block";
-            status.innerText = "Copy failed. Use manual button.";
+            window.location.href = "https://lic.corover.ai/";
         }
     }
 </script>
