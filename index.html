@@ -3,92 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIC Policy Tool</title>
+    <title>LIC Mitra Assistant</title>
     <style>
-        body{ font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; background:#f0f2f5; text-align:center; }
-        .card{ background:white; padding:30px; border-radius:15px; box-shadow:0 4px 10px rgba(0,0,0,0.1); width:85%; max-width:400px; }
-        .policy-box{ font-size:1.5rem; font-weight:bold; color:#00529b; margin:20px 0; border:2px dashed #ccc; padding:15px; border-radius:8px; background:#fff9e6; }
-        .fup-text { color: #28a745; font-weight: bold; margin-bottom: 20px; min-height: 20px; }
-        .btn{ display:block; width:100%; padding:15px; background:#00529b; color:white; text-decoration:none; border-radius:8px; font-weight:bold; border:none; cursor:pointer; margin-top:10px; }
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 15px; height: 15px; animation: spin 1s linear infinite; display: inline-block; margin-right: 5px; }
+        body { font-family: sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; }
+        .data-badge { background: #fff9e6; border: 1px solid #ffe58f; padding: 10px; border-radius: 8px; margin: 10px 0; font-family: monospace; font-size: 1.1rem; color: #856404; }
+        .fup-box { font-weight: bold; color: #28a745; margin: 15px 0; font-size: 1.2rem; }
+        .btn { display: block; width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; }
+        .btn-primary { background: #00529b; color: white; }
+        .btn-copy { background: #e7f3ff; color: #00529b; border: 1px solid #00529b; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #00529b; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 id="status">LIC Assistant</h2>
-    <div id="policy-display" class="policy-box">-------</div>
-    <div id="fup-display" class="fup-text">
-        <span id="loader" class="loader"></span> Scanning FUP...
+    <h3>LIC Assistant</h3>
+    
+    <div class="data-badge" id="p-num">Policy: -------</div>
+    <div class="data-badge" id="p-dob">DOB: --/--/----</div>
+
+    <div id="fup-status" class="fup-box">
+        <div class="loader"></div> Fetching FUP...
     </div>
-    <button class="btn" onclick="copyPolicy()">Copy & Open LIC Mitra</button>
+
+    <button class="btn btn-copy" onclick="copyData('policy')">1. Copy Policy No</button>
+    <button class="btn btn-copy" onclick="copyData('dob')">2. Copy DOB</button>
+    
+    <a href="https://lic.corover.ai/" target="_blank" class="btn btn-primary" style="margin-top:20px;">
+        3. Open LIC Mitra Bot
+    </a>
+    <p style="font-size: 0.8rem; color: #666;">Click 'Get Started' in the bot, then paste these values when asked.</p>
 </div>
 
 <script>
-const params = new URLSearchParams(window.location.search);
-const policyNo = params.get('text');
-const display = document.getElementById('policy-display');
-const fupDisplay = document.getElementById('fup-display');
-const status = document.getElementById('status');
+    const params = new URLSearchParams(window.location.search);
+    const policy = params.get('p');
+    const dob = params.get('d');
 
-if(policyNo){
-    display.innerText = policyNo;
-    fetchFUP(policyNo);
-}
+    if(policy) document.getElementById('p-num').innerText = "Policy: " + policy;
+    if(dob) document.getElementById('p-dob').innerText = "DOB: " + dob;
 
-async function fetchFUP(policy) {
-    const targetUrl = "https://api.lic.corover.ai/lic_v2/chat/query/stream?lang=en";
-    const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(targetUrl);
-    
-    try {
-        const response = await fetch(proxyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "appId": "6af707a1-457a-4d42-ac30-f2e6a1fda747",
-                "inputType": "TEXT",
-                "query": policy.toString(),
-                "userToken": "681bc160-0d60-4d28-a881-e4362cdc1519"
-            })
-        });
+    // Background FUP Fetching
+    if(policy) {
+        fetchFUP(policy);
+    }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = "";
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-            for (let line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.replace('data: ', ''));
-                        if (data.text) fullText += data.text;
-                    } catch (e) {}
-                }
+    async function fetchFUP(p) {
+        const url = "https://corsproxy.io/?https://api.lic.corover.ai/lic_v2/chat/query/stream?lang=en";
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    "appId": "6af707a1-457a-4d42-ac30-f2e6a1fda747",
+                    "inputType": "TEXT",
+                    "query": p.toString(),
+                    "userToken": "681bc160-0d60-4d28-a881-e4362cdc1519"
+                })
+            });
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let text = "";
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                lines.forEach(l => { if(l.startsWith('data: ')) { 
+                    try { text += JSON.parse(l.substring(6)).text; } catch(e){} 
+                }});
             }
+            const dateMatch = text.match(/\d{2}\/\d{2}\/\d{4}/);
+            document.getElementById('fup-status').innerText = dateMatch ? "✅ FUP Found: " + dateMatch[0] : "❌ Manual Check Needed";
+        } catch (e) {
+            document.getElementById('fup-status').innerText = "⚠️ API Error";
         }
-
-        const dateMatch = fullText.match(/\d{2}\/\d{2}\/\d{4}/);
-        fupDisplay.innerText = dateMatch ? "Next FUP: " + dateMatch[0] : "FUP Not Found";
-    } catch (err) {
-        fupDisplay.innerText = "FUP fetch skipped";
     }
-}
 
-async function copyPolicy(){
-    if(!policyNo) return;
-    try{
-        await navigator.clipboard.writeText(policyNo);
-        status.innerText = "✅ Copied!";
-        setTimeout(()=>{ window.location.href="https://lic.corover.ai/"; }, 1000);
-    }catch(err){
-        window.location.href="https://lic.corover.ai/";
+    function copyData(type) {
+        const val = (type === 'policy') ? policy : dob;
+        navigator.clipboard.writeText(val);
+        alert(type.toUpperCase() + " copied!");
     }
-}
 </script>
 </body>
 </html>
