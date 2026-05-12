@@ -1,2 +1,2 @@
 # lic-tool
-chatbot to check FUP
+Fetch NSE Data
