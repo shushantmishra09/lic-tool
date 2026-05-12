@@ -1,2 +1,2 @@
-# lic-tool
+# NSE-tool
 Fetch NSE Data
